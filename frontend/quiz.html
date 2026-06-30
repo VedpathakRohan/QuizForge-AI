@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Assessment Deck - QuizForge AI</title>
+  <!-- Google Fonts: Outfit and Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="css/style.css?v=1.1">
+</head>
+<body class="quiz-player-body">
+  <!-- Background Decorative Orbs -->
+  <div class="background-orb orb-1"></div>
+  <div class="background-orb orb-3"></div>
+
+  <div class="app-container quiz-container">
+    <!-- Top Navigation / Status Header -->
+    <header class="quiz-player-header glass-panel">
+      <div class="quiz-info-meta">
+        <h1 class="quiz-subject-title" id="quiz-title-display">Loading Assessment...</h1>
+        <div class="meta-badges">
+          <span class="meta-badge" id="quiz-topic-badge">Topic</span>
+          <span class="meta-badge" id="quiz-diff-badge">Difficulty</span>
+        </div>
+      </div>
+      
+      <!-- Performance / Anti-Cheat Status Grid -->
+      <div class="header-status-grid">
+        <div class="status-indicator timer-status">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="status-icon"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span id="player-timer">00:00</span>
+        </div>
+        <div class="status-indicator security-status warning-pulse" id="cheat-indicator">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="status-icon"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span>Violations: <span id="cheat-count">0</span></span>
+        </div>
+        <div class="status-indicator score-status">
+          <span class="score-label">Score:</span>
+          <span id="player-score-display">0/0</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Quiz Progression Bar -->
+    <div class="quiz-progress-track">
+      <div class="quiz-progress-fill" id="quiz-progress-indicator" style="width: 0%;"></div>
+    </div>
+
+    <!-- Active Question Arena -->
+    <main class="quiz-arena">
+      <div class="question-header">
+        <span class="question-number-badge" id="question-index-display">Question - of -</span>
+      </div>
+
+      <div class="question-card glass-panel" id="question-text-card">
+        <h2 class="question-text" id="question-text-display">Evaluating database nodes and queries...</h2>
+      </div>
+
+      <!-- Multiple-Choice Selection Matrix -->
+      <div class="choice-matrix" id="options-matrix">
+        <button class="choice-option-btn glass-panel" data-index="0" disabled>
+          <span class="choice-letter">A</span>
+          <span class="choice-text">Loading choice configuration...</span>
+        </button>
+        <button class="choice-option-btn glass-panel" data-index="1" disabled>
+          <span class="choice-letter">B</span>
+          <span class="choice-text">Loading choice configuration...</span>
+        </button>
+        <button class="choice-option-btn glass-panel" data-index="2" disabled>
+          <span class="choice-letter">C</span>
+          <span class="choice-text">Loading choice configuration...</span>
+        </button>
+        <button class="choice-option-btn glass-panel" data-index="3" disabled>
+          <span class="choice-letter">D</span>
+          <span class="choice-text">Loading choice configuration...</span>
+        </button>
+      </div>
+    </main>
+
+    <!-- Bottom Persistent Feedback Overlay Drawer -->
+    <div class="feedback-drawer glass-panel hidden" id="feedback-drawer">
+      <div class="drawer-content">
+        <div class="feedback-heading-block">
+          <div class="feedback-result-badge" id="feedback-status-badge">
+            <span id="feedback-status-icon"></span>
+            <span id="feedback-status-text">Correct Answer</span>
+          </div>
+        </div>
+        
+        <div class="explanation-body">
+          <h4 class="explanation-title">Academic Explanation</h4>
+          <p class="explanation-text" id="explanation-text-display">
+            Deep explanation of underlying principles goes here.
+          </p>
+        </div>
+
+        <button id="next-question-btn" class="submit-button next-button">
+          <span class="btn-text" id="next-btn-label">Next Question</span>
+          <span class="btn-glow"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Performance Summary Modal Overlay -->
+  <div class="modal-overlay" id="summary-modal" aria-hidden="true" role="dialog">
+    <div class="modal-card glass-panel summary-modal-card">
+      <div class="summary-header">
+        <div class="result-trophy-wrapper">
+          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="trophy-icon"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.45 1-1 1H4v2h16v-2h-5c-.55 0-1-.45-1-1v-2.34"/><path d="M12 2a4.7 4.7 0 0 1 4 5v5c0 2.2-1.8 4-4 4s-4-1.8-4-4V7a4.7 4.7 0 0 1 4-5z"/></svg>
+        </div>
+        <h2 class="modal-title" id="summary-headline">Assessment Terminated</h2>
+        <p class="modal-desc" id="summary-eval-msg">AI performance evaluation report compiled.</p>
+      </div>
+
+      <!-- Result Card Metrics Grid -->
+      <div class="summary-metrics-grid">
+        <div class="metric-score-box text-center">
+          <span class="metric-big-val" id="summary-accuracy">0%</span>
+          <span class="metric-lbl">Accuracy Score</span>
+        </div>
+
+        <div class="metric-detailed-stats">
+          <div class="detail-stat-row">
+            <span class="detail-lbl">Correct Answers:</span>
+            <span class="detail-val" id="summary-raw-score">0 / 0</span>
+          </div>
+          <div class="detail-stat-row">
+            <span class="detail-lbl">Duration Details:</span>
+            <span class="detail-val" id="summary-duration">00:00</span>
+          </div>
+          <div class="detail-stat-row">
+            <span class="detail-lbl">Anti-Cheat Flags:</span>
+            <span class="detail-val" id="summary-cheats">0 Violations</span>
+          </div>
+          <div class="detail-stat-row">
+            <span class="detail-lbl">Integrity Verification:</span>
+            <span class="detail-val" id="summary-integrity-status">Verified</span>
+          </div>
+        </div>
+      </div>
+
+      <button id="finish-and-exit-btn" class="submit-button exit-button">
+        <span class="btn-text">Submit Scores & Exit</span>
+        <span class="btn-glow"></span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Client-side Logic Script -->
+  <script src="js/quiz-player.js?v=1.1"></script>
+</body>
+</html>

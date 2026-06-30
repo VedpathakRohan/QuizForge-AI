@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign In - QuizForge AI</title>
+  <!-- SEO Meta Tags -->
+  <meta name="description" content="Sign in to your QuizForge AI account to track assessment scores, play quizzes, and view analytics.">
+  <!-- Google Fonts: Inter & Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="css/style.css?v=1.1">
+  <style>
+    /* Custom page layout overrides for authentication screens */
+    .auth-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+    .auth-card {
+      width: 100%;
+      max-width: 440px;
+      padding: 2.5rem;
+    }
+    .auth-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    .auth-header .brand-logo {
+      justify-content: center;
+      margin-bottom: 1rem;
+    }
+    .auth-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text-dark);
+      margin-bottom: 0.5rem;
+    }
+    .auth-subtitle {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+    .captcha-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .captcha-img-wrapper {
+      flex: 1;
+      height: 44px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: var(--border-radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .captcha-img-wrapper svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .captcha-refresh-btn {
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: var(--border-radius-sm);
+      padding: 0.65rem 0.85rem;
+      cursor: pointer;
+      color: var(--text-muted);
+      transition: var(--transition-smooth);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .captcha-refresh-btn:hover {
+      background: #e2e8f0;
+      color: var(--text-dark);
+    }
+    .auth-footer {
+      text-align: center;
+      margin-top: 1.5rem;
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+    .auth-link {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 600;
+      transition: var(--transition-smooth);
+    }
+    .auth-link:hover {
+      text-decoration: underline;
+    }
+    .error-banner {
+      background: #fef2f2;
+      border: 1px solid #fee2e2;
+      border-radius: var(--border-radius-sm);
+      color: #b91c1c;
+      padding: 0.75rem 1rem;
+      font-size: 0.85rem;
+      font-weight: 500;
+      margin-bottom: 1.25rem;
+      display: none;
+      animation: slide-up 0.2s ease;
+    }
+  </style>
+</head>
+<body>
+  <div class="auth-container">
+    <div class="auth-card glass-panel">
+      <div class="auth-header">
+        <div class="brand-logo">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="logo-icon">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+          <span class="brand-name">QuizForge <span class="accent-text">AI</span></span>
+        </div>
+        <h2 class="auth-title">Welcome Back</h2>
+        <p class="auth-subtitle">Sign in to manage and build your educational assessments</p>
+      </div>
+
+      <div class="error-banner" id="error-banner"></div>
+
+      <form id="login-form" class="config-form">
+        <!-- Email Field -->
+        <div class="form-group">
+          <label class="form-label" for="login-email">Email Address</label>
+          <input type="email" id="login-email" required placeholder="name@domain.com" class="tag-input-field" style="width: 100%; padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: var(--border-radius-sm); font-family: var(--font-primary); font-size: 0.95rem;">
+        </div>
+
+        <!-- Password Field -->
+        <div class="form-group" style="margin-bottom: 1.5rem;">
+          <label class="form-label" for="login-password">Password</label>
+          <input type="password" id="login-password" required placeholder="••••••••" class="tag-input-field" style="width: 100%; padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: var(--border-radius-sm); font-family: var(--font-primary); font-size: 0.95rem;">
+        </div>
+
+        <!-- CAPTCHA Field -->
+        <div class="form-group" style="margin-bottom: 1.5rem;">
+          <label class="form-label">Security Check (CAPTCHA)</label>
+          <div class="captcha-row">
+            <div class="captcha-img-wrapper" id="captcha-svg-container">
+              <!-- Inline SVG dynamic content -->
+            </div>
+            <button type="button" class="captcha-refresh-btn" id="refresh-captcha-btn" aria-label="Refresh Captcha">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+              </svg>
+            </button>
+          </div>
+          <input type="text" id="captcha-input" required placeholder="Enter CAPTCHA symbols" class="tag-input-field" style="width: 100%; padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: var(--border-radius-sm); font-family: var(--font-primary); font-size: 0.95rem;">
+        </div>
+
+        <!-- Submit Button -->
+        <button type="submit" class="submit-button" id="submit-btn">
+          <span class="btn-text">Sign In</span>
+        </button>
+      </form>
+
+      <div class="auth-footer">
+        Don't have an account? <a href="signup.html" class="auth-link">Sign Up</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/login.js"></script>
+</body>
+</html>

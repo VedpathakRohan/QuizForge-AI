@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QuizForge AI - Premium AI-Powered Assessment Platform</title>
+  <!-- SEO Meta Tags -->
+  <meta name="description" content="Generate customized, academic-quality quizzes instantly using Gemini AI. Real-time analytics, persistent score tracking, and built-in anti-cheat tab monitoring.">
+  <meta name="keywords" content="AI, quiz generator, education, exam prep, assessment tool, online quiz, learning analytics, Gemini AI">
+  <meta name="author" content="QuizForge AI Team">
+  <!-- Google Fonts: Inter & Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="css/style.css?v=1.1">
+</head>
+<body>
+  <!-- Background Decorative Orbs (Hidden via CSS, kept for markup integrity) -->
+  <div class="background-orb orb-1"></div>
+  <div class="background-orb orb-2"></div>
+  <div class="background-orb orb-3"></div>
+
+  <div class="app-container">
+    <!-- Header Block -->
+    <header class="app-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem;">
+      <div>
+        <div class="brand-logo">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="logo-icon">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+          <span class="brand-name">QuizForge <span class="accent-text">AI</span></span>
+        </div>
+        <p class="tagline">Forging academic assessments and deep cognitive diagnostics through AI</p>
+      </div>
+      <div class="user-welcome-badge" id="user-profile-widget" style="display: flex; align-items: center; gap: 1rem; padding: 0.5rem 1rem; background: #ffffff; border: 1px solid #e5e7eb; border-radius: var(--border-radius-md); box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+        <div class="user-avatar" style="width: 32px; height: 32px; background: #EFF6FF; border-radius: 50%; color: var(--primary); font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 0.9rem;" id="user-avatar-initials">U</div>
+        <div class="user-meta" style="display: flex; flex-direction: column; text-align: left;">
+          <span class="welcome-text" style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">Logged in as</span>
+          <span class="user-name" id="display-user-name" style="font-size: 0.875rem; color: var(--text-dark); font-weight: 700;">User Name</span>
+        </div>
+        <button type="button" id="logout-btn" style="background: none; border: none; padding: 0.25rem; cursor: pointer; color: #94a3b8; transition: var(--transition-smooth); display: inline-flex; align-items: center; justify-content: center;" title="Sign Out">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Global Stats Dashboard -->
+    <section class="stats-section" aria-label="Global Platform Metrics">
+      <div class="stats-grid">
+        <div class="stat-card" id="stat-generated-card">
+          <div class="stat-icon-wrapper generated-color">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          </div>
+          <div class="stat-details">
+            <h3 class="stat-label">Total Generated</h3>
+            <p class="stat-value" id="stat-total-generated">--</p>
+          </div>
+        </div>
+
+        <div class="stat-card" id="stat-completed-card">
+          <div class="stat-icon-wrapper completed-color">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          </div>
+          <div class="stat-details">
+            <h3 class="stat-label">Quizzes Completed</h3>
+            <p class="stat-value" id="stat-total-taken">--</p>
+          </div>
+        </div>
+
+        <div class="stat-card" id="stat-accuracy-card">
+          <div class="stat-icon-wrapper accuracy-color">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+          </div>
+          <div class="stat-details">
+            <h3 class="stat-label">Global Accuracy</h3>
+            <p class="stat-value" id="stat-avg-accuracy">--</p>
+          </div>
+        </div>
+
+        <div class="stat-card" id="stat-integrity-card">
+          <div class="stat-icon-wrapper integrity-color">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <div class="stat-details">
+            <h3 class="stat-label">Integrity Index</h3>
+            <p class="stat-value" id="stat-integrity-rate">--</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Generator Section -->
+    <main class="main-content">
+      <div class="generator-card glass-panel">
+        <div class="card-header">
+          <h2 class="section-title">Configure Assessment</h2>
+          <p class="section-description">Define your subject parameters below. Gemini AI will generate a tailored multiple-choice examination.</p>
+        </div>
+
+        <form id="quiz-config-form" class="config-form">
+          <!-- Topic Input with Keywords/Tags functionality -->
+          <div class="form-group">
+            <label class="form-label">Subject Matter / Topics (Keywords)</label>
+            <div class="tags-input-wrapper" id="tags-wrapper">
+              <div class="tags-list" id="tags-list"></div>
+              <input type="text" id="quiz-topic-input" placeholder="Type topic and press Enter or comma..." class="tag-input-field">
+            </div>
+            <input type="hidden" id="quiz-topic" required>
+            <span class="field-hint">Press Enter or comma (,) after each keyword (e.g. JavaScript, Closures, Scopes).</span>
+          </div>
+
+          <!-- Difficulty Selector -->
+          <div class="form-group">
+            <label class="form-label">Target Difficulty Level</label>
+            <div class="difficulty-picker">
+              <label class="diff-option-wrapper" for="diff-easy">
+                <input type="radio" name="difficulty" id="diff-easy" value="easy" checked>
+                <div class="diff-btn-card">
+                  <span class="diff-badge easy-badge">Easy</span>
+                  <p class="diff-desc">Terminological recall, vocabulary, and basic factual verification.</p>
+                </div>
+              </label>
+
+              <label class="diff-option-wrapper" for="diff-medium">
+                <input type="radio" name="difficulty" id="diff-medium" value="medium">
+                <div class="diff-btn-card">
+                  <span class="diff-badge medium-badge">Medium</span>
+                  <p class="diff-desc">Application of principles, analysis, and intermediate concept mapping.</p>
+                </div>
+              </label>
+
+              <label class="diff-option-wrapper" for="diff-hard">
+                <input type="radio" name="difficulty" id="diff-hard" value="hard">
+                <div class="diff-btn-card">
+                  <span class="diff-badge hard-badge">Hard</span>
+                  <p class="diff-desc">Advanced debugging, critical analysis, and multi-step cognitive reasoning.</p>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Question Count Selector -->
+          <div class="form-group">
+            <label class="form-label">Assessment Length</label>
+            <div class="question-count-selector">
+              <button type="button" class="q-count-btn" data-value="5">5 Questions</button>
+              <button type="button" class="q-count-btn active" data-value="10">10 Questions</button>
+              <button type="button" class="q-count-btn" data-value="25">25 Questions</button>
+            </div>
+            <input type="hidden" id="quiz-question-count" value="10">
+          </div>
+
+          <!-- Submit Button -->
+          <button type="submit" id="generate-btn" class="submit-button">
+            <span class="btn-text">Forge Quiz with AI</span>
+          </button>
+        </form>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <p>&copy; 2026 QuizForge AI. Empowered by Gemini-2.5-Flash. All rights reserved.</p>
+    </footer>
+  </div>
+
+  <!-- Loading Modal Overlay (with backdrop blur and skeleton animation) -->
+  <div class="modal-overlay" id="loading-modal" aria-hidden="true" role="dialog">
+    <div class="modal-card glass-panel text-center">
+      <div class="loader-animation">
+        <div class="spinner"></div>
+      </div>
+      <h2 class="modal-title" id="loading-status-title">Assembling Request...</h2>
+      <p class="modal-desc" id="loading-status-desc">Connecting to Google Gemini API servers...</p>
+      
+      <!-- Progress Track -->
+      <div class="progress-bar-container">
+        <div class="progress-bar-fill" id="modal-progress-bar"></div>
+      </div>
+      <span class="progress-percentage" id="modal-progress-pct">0%</span>
+    </div>
+  </div>
+
+  <!-- App Controller Script -->
+  <script src="js/app.js?v=1.1"></script>
+</body>
+</html>

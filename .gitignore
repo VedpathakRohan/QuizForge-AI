@@ -1,0 +1,5 @@
+
+# Ignore sensitive and installed files
+backend/.env
+backend/node_modules/
+node_modules/
