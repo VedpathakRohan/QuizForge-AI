@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # QuizForge AI
 
 ## Overview
@@ -126,4 +127,3 @@ This project can be pushed to the following remote repository:
 ## License
 
 MIT
-
