@@ -64,6 +64,108 @@ function generateFallbackQuiz(topic, difficulty, count = 10) {
   };
 }
 
+function extractTextFromAiResponse(response) {
+  if (!response) return '';
+  if (typeof response === 'string') return response;
+  if (response.text) return response.text;
+  if (response.candidates?.[0]?.content?.parts) {
+    return response.candidates[0].content.parts
+      .map((part) => (part && typeof part.text === 'string' ? part.text : ''))
+      .join('');
+  }
+  return '';
+}
+
+function stripMarkdownCodeBlocks(raw) {
+  return raw.replace(/```(?:json)?\n([\s\S]*?)```/g, '$1').trim();
+}
+
+function extractJsonString(raw) {
+  if (!raw) return '';
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    return trimmed;
+  }
+
+  const firstBrace = trimmed.indexOf('{');
+  const lastBrace = trimmed.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    return trimmed.slice(firstBrace, lastBrace + 1);
+  }
+  return trimmed;
+}
+
+function parseAiJson(rawText) {
+  if (!rawText || typeof rawText !== 'string') return null;
+
+  let candidate = stripMarkdownCodeBlocks(rawText);
+  candidate = candidate.trim();
+
+  try {
+    return JSON.parse(candidate);
+  } catch (firstParseError) {
+    const extracted = extractJsonString(candidate);
+    if (extracted !== candidate) {
+      try {
+        return JSON.parse(extracted);
+      } catch (secondParseError) {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
+function normalizeQuestionItem(q, index) {
+  if (!q || typeof q !== 'object') return null;
+
+  const questionText = String(q.questionText || q.question || '').trim();
+  if (!questionText) return null;
+
+  const rawOptions = Array.isArray(q.options)
+    ? q.options
+    : Array.isArray(q.choices)
+      ? q.choices
+      : Array.isArray(q.answers)
+        ? q.answers
+        : [];
+
+  const cleanedOptions = rawOptions
+    .filter((opt) => typeof opt === 'string' && opt.trim())
+    .map((opt) => opt.trim());
+
+  const uniqueOptions = [...new Set(cleanedOptions)];
+  if (uniqueOptions.length < 4) return null;
+
+  const options = uniqueOptions.slice(0, 4);
+
+  let correctAnswerIndex = q.correctAnswerIndex;
+  if (typeof correctAnswerIndex === 'string') {
+    const trimmed = correctAnswerIndex.trim().toUpperCase();
+    if (/^[A-D]$/.test(trimmed)) {
+      correctAnswerIndex = trimmed.charCodeAt(0) - 65;
+    }
+  }
+
+  correctAnswerIndex = Number.isInteger(correctAnswerIndex)
+    ? correctAnswerIndex
+    : parseInt(correctAnswerIndex, 10);
+
+  if (Number.isNaN(correctAnswerIndex) || correctAnswerIndex < 0 || correctAnswerIndex > 3) {
+    return null;
+  }
+
+  const explanation = String(q.explanation || q.explain || q.reason || '').trim();
+  if (!explanation) return null;
+
+  return {
+    questionText,
+    options,
+    correctAnswerIndex,
+    explanation
+  };
+}
+
 // Configure nodemailer transport
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || '',
@@ -79,10 +181,11 @@ const transporter = nodemailer.createTransport({
 async function sendOtpEmail(email, otp) {
   console.log(`[OTP DISPATCH] Attempting to send OTP email to ${email}...`);
   console.log(`[OTP FALLBACK CODE] >>> ${otp} <<<`);
-  
-  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+
+  const isSmtpConfigured = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+  if (!isSmtpConfigured) {
     console.log('[OTP DISPATCH] SMTP credentials missing. Using local terminal console fallback.');
-    return;
+    return false;
   }
 
   try {
@@ -103,8 +206,10 @@ async function sendOtpEmail(email, otp) {
       `
     });
     console.log(`[OTP DISPATCH] Verification email successfully sent to ${email}.`);
+    return true;
   } catch (err) {
     console.error(`[OTP DISPATCH ERROR] Failed to send email to ${email}:`, err.message);
+    return false;
   }
 }
 
@@ -247,15 +352,16 @@ app.post('/api/auth/signup', async (req, res) => {
     });
 
     // Send OTP verification email
-    await sendOtpEmail(lowerEmail, otp);
-
-    const showOtp = !process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS;
+    const emailSent = await sendOtpEmail(lowerEmail, otp);
+    const isSmtpConfigured = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+    const showOtp = !isSmtpConfigured || !emailSent;
 
     return res.status(200).json({
       success: true,
       message: 'Verification OTP code successfully sent to your email.',
       email: lowerEmail,
-      devOtp: showOtp ? otp : undefined
+      devOtp: showOtp ? otp : undefined,
+      emailSent
     });
   } catch (err) {
     console.error('Signup error:', err);
@@ -360,14 +466,15 @@ app.post('/api/auth/resend-otp', async (req, res) => {
     pending.otp = newOtp;
     pending.expiresAt = Date.now() + 10 * 60 * 1000;
 
-    await sendOtpEmail(lowerEmail, newOtp);
-
-    const showOtp = !process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS;
+    const emailSent = await sendOtpEmail(lowerEmail, newOtp);
+    const isSmtpConfigured = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+    const showOtp = !isSmtpConfigured || !emailSent;
 
     return res.json({
       success: true,
       message: 'A new 6-digit verification code has been dispatched.',
-      devOtp: showOtp ? newOtp : undefined
+      devOtp: showOtp ? newOtp : undefined,
+      emailSent
     });
   } catch (err) {
     console.error('Resend OTP error:', err);
@@ -535,13 +642,17 @@ You must output a single, valid JSON object matching the requested schema. Retur
             }
           });
 
-          if (response && response.text) {
-            console.log(`Success! Quiz successfully generated via model: "${modelName}".`);
-            quizData = response.text;
-            break;
+          const rawText = extractTextFromAiResponse(response);
+          if (rawText) {
+            quizData = parseAiJson(rawText);
+            if (quizData && typeof quizData === 'object') {
+              console.log(`Success! Quiz candidate generated via model: "${modelName}".`);
+              break;
+            }
+            console.warn(`AI response from model "${modelName}" could not be parsed as JSON.`);
           }
         } catch (err) {
-          console.warn(`Model "${modelName}" failed with error:`, err.message || err);
+          console.warn(`Model "${modelName}" failed with error:`, err?.message || err);
         }
       }
     }
@@ -550,16 +661,17 @@ You must output a single, valid JSON object matching the requested schema. Retur
       if (!hasGeminiApiKey) {
         console.warn('No Gemini API key configured. Using fallback quiz generator.');
       } else {
-        console.warn('Falling back to built-in generator due to AI API failure.');
+        console.warn('Falling back to built-in generator due to AI API failure or invalid output.');
       }
       quizData = generateFallbackQuiz(topic, difficulty, parsedCount);
     }
 
     if (typeof quizData === 'string') {
-      try {
-        quizData = JSON.parse(quizData);
-      } catch (parseError) {
-        console.warn('Failed to parse AI JSON output. Falling back to built-in generator.');
+      const parsed = parseAiJson(quizData);
+      if (parsed && typeof parsed === 'object') {
+        quizData = parsed;
+      } else {
+        console.warn('Failed to parse AI JSON output string. Falling back to built-in generator.');
         quizData = generateFallbackQuiz(topic, difficulty, parsedCount);
       }
     }
@@ -570,31 +682,25 @@ You must output a single, valid JSON object matching the requested schema. Retur
 
     quizData.topic = topic;
     quizData.difficulty = difficulty.toLowerCase();
-    if (!quizData.title) {
+    if (!quizData.title || typeof quizData.title !== 'string') {
       quizData.title = `${topic.charAt(0).toUpperCase() + topic.slice(1)} (${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}) Quiz`;
+    }
+
+    const normalizedQuestions = Array.isArray(quizData.questions) ? quizData.questions : [];
+    const validQuestions = normalizedQuestions
+      .map((question, index) => normalizeQuestionItem(question, index))
+      .filter(Boolean);
+
+    if (validQuestions.length < Math.min(parsedCount, 3)) {
+      console.warn('Generated quiz did not yield enough valid questions. Falling back to built-in generator.');
+      quizData = generateFallbackQuiz(topic, difficulty, parsedCount);
+    } else {
+      quizData.questions = validQuestions.slice(0, parsedCount);
     }
 
     if (!Array.isArray(quizData.questions) || quizData.questions.length === 0) {
       throw new Error('Quiz data is missing a valid questions array.');
     }
-
-    quizData.questions = quizData.questions.map((q) => {
-      let options = Array.isArray(q.options) ? q.options : [];
-      while (options.length < 4) options.push('Placeholder Option');
-      options = options.slice(0, 4);
-
-      let correctIdx = parseInt(q.correctAnswerIndex, 10);
-      if (isNaN(correctIdx) || correctIdx < 0 || correctIdx > 3) {
-        correctIdx = 0;
-      }
-
-      return {
-        questionText: q.questionText || 'Question text not provided by AI.',
-        options,
-        correctAnswerIndex: correctIdx,
-        explanation: q.explanation || 'Detailed solution is not available for this question.'
-      };
-    });
 
     let savedQuiz;
     if (mongoose.connection.readyState === 1) {
