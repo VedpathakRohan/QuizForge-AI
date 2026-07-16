@@ -273,6 +273,7 @@ const authenticateUser = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.warn('Auth failed: Missing or invalid token format');
       return res.status(401).json({ success: false, error: 'Unauthorized: Missing or invalid token format.' });
     }
 
@@ -280,15 +281,22 @@ const authenticateUser = async (req, res, next) => {
     let user = null;
 
     if (mongoose.connection.readyState === 1) {
+      console.log('MongoDB connected - querying database for token');
       user = await User.findOne({ sessionToken: token });
     } else {
+      console.log('MongoDB offline - checking in-memory sessions');
       user = inMemorySessions.get(token);
+      if (!user) {
+        console.warn(`Token not found in in-memory sessions. Available tokens: ${Array.from(inMemorySessions.keys()).length}`);
+      }
     }
 
     if (!user) {
-      return res.status(401).json({ success: false, error: 'Unauthorized: Invalid session token.' });
+      console.warn(`Auth failed: No user found for token: ${token.substring(0, 10)}...`);
+      return res.status(401).json({ success: false, error: 'Unauthorized: Invalid session token. Please log in again.' });
     }
 
+    console.log(`Auth successful for user: ${user.email}`);
     req.user = user;
     next();
   } catch (err) {
@@ -296,6 +304,32 @@ const authenticateUser = async (req, res, next) => {
     return res.status(500).json({ success: false, error: 'Internal server error during authentication.' });
   }
 };
+
+// --- HEALTH CHECK ENDPOINT ---
+
+/**
+ * GET /api/health
+ * Returns server and database status
+ */
+app.get('/api/health', (req, res) => {
+  const mongoStatus = mongoose.connection.readyState;
+  const statusMap = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting'
+  };
+  
+  res.json({
+    success: true,
+    status: 'operational',
+    database: statusMap[mongoStatus],
+    mongoConnected: mongoStatus === 1,
+    timestamp: new Date().toISOString(),
+    inMemorySessions: inMemorySessions.size,
+    inMemoryUsers: inMemoryUsers.size
+  });
+});
 
 // --- AUTHENTICATION & CAPTCHA ENDPOINTS ---
 
@@ -742,10 +776,16 @@ You must output a single, valid JSON object matching the requested schema. Retur
     });
   } catch (err) {
     console.error('Error in /api/quiz/generate:', err);
+    const mongoStatus = mongoose.connection.readyState === 1 ? 'connected' : 'offline';
     return res.status(500).json({
       success: false,
-      error: 'An internal error occurred during quiz generation.',
-      details: err.message
+      error: 'Assessment Generation Failed',
+      details: err.message,
+      diagnostics: {
+        mongoStatus: mongoStatus,
+        geminiConfigured: hasGeminiApiKey,
+        timestamp: new Date().toISOString()
+      }
     });
   }
 });
