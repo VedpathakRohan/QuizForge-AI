@@ -881,6 +881,15 @@ app.get('/api/quiz/stats', authenticateUser, async (req, res) => {
 });
 
 // Start listening for API traffic
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`QuizForge AI Backend listening at http://localhost:${PORT}`);
+});
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use. Please stop the other process or set a different PORT in backend/.env.`);
+  } else {
+    console.error('Server error:', err);
+  }
+  process.exit(1);
 });

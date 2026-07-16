@@ -1,4 +1,10 @@
 {
+  "private": true,
+  "scripts": {
+    "install-backend": "cd backend && npm install",
+    "start": "cd backend && npm start",
+    "dev": "cd backend && npm run dev"
+  },
   "dependencies": {
     "node": "^26.4.0"
   }
