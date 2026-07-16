@@ -646,15 +646,28 @@ The level must affect the depth, conceptual vocabulary, and complexity:
 - medium: application of principles, analyzing scenarios, and distinguishing between core methodologies.
 - hard: multi-step logic, edge cases, analyzing complex relationships, and debugging or troubleshooting situations.
 
-The quiz must contain exactly ${parsedCount} questions.
+CRITICAL REQUIREMENTS:
+1. Generate EXACTLY ${parsedCount} questions
+2. Each question MUST have ALL four fields
+3. Return ONLY valid JSON - no markdown, no explanation, no wrapping
+4. Each question must have exactly 4 unique answer options
 
-Each question must contain:
-1. questionText: Clear, concise, and academically precise question text.
-2. options: Array of exactly 4 strings representing distinct response choices.
-3. correctAnswerIndex: 0-indexed integer (0, 1, 2, or 3) indicating the exact correct option.
-4. explanation: A thorough educational breakdown explaining why the correct choice is correct and pointing out errors in other options.
+JSON Structure Required:
+{
+  "title": "Quiz Title",
+  "topic": "${topic}",
+  "difficulty": "${difficulty}",
+  "questions": [
+    {
+      "questionText": "Clear, precise question text here",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctAnswerIndex": 0,
+      "explanation": "Why this answer is correct and why others are wrong"
+    }
+  ]
+}
 
-You must output a single, valid JSON object matching the requested schema. Return ONLY JSON. Do not wrap inside Markdown blocks (like \`\`\`\`json).`;
+IMPORTANT: Ensure options are distinct and meaningful. The correctAnswerIndex must be 0, 1, 2, or 3 (integer, not string).`;
 
       const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
       for (const modelName of modelsToTry) {
@@ -680,28 +693,46 @@ You must output a single, valid JSON object matching the requested schema. Retur
                         questionText: { type: 'string' },
                         options: {
                           type: 'array',
-                          items: { type: 'string' }
+                          items: { type: 'string' },
+                          minItems: 4,
+                          maxItems: 4
                         },
-                        correctAnswerIndex: { type: 'integer' },
+                        correctAnswerIndex: { type: 'integer', minimum: 0, maximum: 3 },
                         explanation: { type: 'string' }
                       },
-                      required: ['questionText', 'options', 'correctAnswerIndex', 'explanation']
-                    }
+                      required: ['questionText', 'options', 'correctAnswerIndex', 'explanation'],
+                      additionalProperties: false
+                    },
+                    minItems: 1
                   }
                 },
-                required: ['title', 'topic', 'difficulty', 'questions']
+                required: ['title', 'topic', 'difficulty', 'questions'],
+                additionalProperties: false
               }
             }
           });
 
           const rawText = extractTextFromAiResponse(response);
+          console.log(`Model "${modelName}" response length: ${rawText?.length || 0} characters`);
+          
           if (rawText) {
             quizData = parseAiJson(rawText);
             if (quizData && typeof quizData === 'object') {
               console.log(`Success! Quiz candidate generated via model: "${modelName}".`);
+              console.log(`Questions received: ${quizData.questions?.length || 0}`);
+              if (Array.isArray(quizData.questions) && quizData.questions.length > 0) {
+                const firstQuestion = quizData.questions[0];
+                console.log(`First question sample:`, {
+                  hasText: !!firstQuestion.questionText,
+                  optionsCount: firstQuestion.options?.length,
+                  hasIndex: typeof firstQuestion.correctAnswerIndex !== 'undefined',
+                  hasExplanation: !!firstQuestion.explanation
+                });
+              }
               break;
             }
             console.warn(`AI response from model "${modelName}" could not be parsed as JSON.`);
+            console.warn(`Raw response preview: ${rawText.substring(0, 200)}...`);
           }
         } catch (err) {
           console.warn(`Model "${modelName}" failed with error:`, err?.message || err);
@@ -740,8 +771,23 @@ You must output a single, valid JSON object matching the requested schema. Retur
 
     const normalizedQuestions = Array.isArray(quizData.questions) ? quizData.questions : [];
     const validQuestions = normalizedQuestions
-      .map((question, index) => normalizeQuestionItem(question, index))
+      .map((question, index) => {
+        const result = normalizeQuestionItem(question, index);
+        if (!result) {
+          console.warn(`Question ${index + 1} failed validation:`, {
+            hasText: !!question.questionText,
+            optionsCount: question.options?.length,
+            optionsUnique: question.options ? [...new Set(question.options)].length : 0,
+            hasIndex: typeof question.correctAnswerIndex !== 'undefined',
+            indexValue: question.correctAnswerIndex,
+            hasExplanation: !!question.explanation
+          });
+        }
+        return result;
+      })
       .filter(Boolean);
+
+    console.log(`Validation complete: ${validQuestions.length} of ${normalizedQuestions.length} questions passed`);
 
     if (validQuestions.length < Math.min(parsedCount, 3)) {
       console.warn('Generated quiz did not yield enough valid questions. Falling back to built-in generator.');
