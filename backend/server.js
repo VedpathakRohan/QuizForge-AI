@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import Quiz from './models/Quiz.js';
 import Analytics from './models/Analytics.js';
@@ -11,6 +13,10 @@ import nodemailer from 'nodemailer';
 
 // Load environment configurations
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const frontendPath = path.join(__dirname, '../frontend');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -234,6 +240,18 @@ function generateCaptcha() {
 // Configure Middleware
 app.use(cors());
 app.use(express.json());
+
+// Serve frontend static files
+app.use(express.static(frontendPath));
+app.get('/', (req, res) => {
+  res.sendFile(path.join(frontendPath, 'index.html'));
+});
+app.get('*', (req, res, next) => {
+  if (req.method === 'GET' && !req.path.startsWith('/api')) {
+    return res.sendFile(path.join(frontendPath, 'index.html'));
+  }
+  next();
+});
 
 // Log incoming API calls
 app.use((req, res, next) => {
