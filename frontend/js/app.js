@@ -30,13 +30,16 @@ document.addEventListener('DOMContentLoaded', () => {
     userAvatarInitials.textContent = initials || 'U';
   }
 
+  function clearSessionAndGoToLogin() {
+    localStorage.removeItem('quizforge_auth_token');
+    localStorage.removeItem('quizforge_user_name');
+    localStorage.removeItem('quizforge_user_email');
+    localStorage.removeItem('quizforge_current_quiz');
+    window.location.href = 'login.html';
+  }
+
   if (logoutBtn) {
-    logoutBtn.addEventListener('click', () => {
-      localStorage.removeItem('quizforge_auth_token');
-      localStorage.removeItem('quizforge_user_name');
-      localStorage.removeItem('quizforge_user_email');
-      window.location.href = 'login.html';
-    });
+    logoutBtn.addEventListener('click', clearSessionAndGoToLogin);
   }
 
   // Pull DOM element references
@@ -147,6 +150,11 @@ document.addEventListener('DOMContentLoaded', () => {
           'Authorization': `Bearer ${token}`
         }
       });
+      if (response.status === 401) {
+        // Session is stale (e.g. server restarted) - sign in again.
+        clearSessionAndGoToLogin();
+        return;
+      }
       if (!response.ok) throw new Error('API server returned error status.');
       
       const data = await response.json();
@@ -202,7 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Cycle descriptive text during loading
       const loadingStages = [
-        { pct: 15, title: 'Connecting to AI Engine', desc: 'Warming up gemini-2.5-flash assessment nodes...' },
+        { pct: 15, title: 'Connecting to AI Engine', desc: 'Warming up the Gemini assessment engine...' },
         { pct: 35, title: 'Analyzing Subject Matter', desc: `Scanning academic taxonomy guidelines for "${topic}"...` },
         { pct: 55, title: 'Assembling Assessment Card', desc: `Structuring ${countValue} questions suited for a ${difficulty} evaluation...` },
         { pct: 75, title: 'Injecting Academic Rationales', desc: 'Formulating detailed explanatory cards for correct answers...' },
@@ -240,6 +248,14 @@ document.addEventListener('DOMContentLoaded', () => {
           })
         });
 
+        if (response.status === 401) {
+          clearInterval(progressTimer);
+          loadingModal.setAttribute('aria-hidden', 'true');
+          alert('Your session has expired. Please sign in again.');
+          clearSessionAndGoToLogin();
+          return;
+        }
+
         if (!response.ok) {
           const errData = await response.json().catch(() => ({}));
           throw new Error(errData.error || 'Server failed to build quiz assessment.');
@@ -270,7 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
         clearInterval(progressTimer);
         loadingModal.setAttribute('aria-hidden', 'true');
         console.error('Generation Error:', err);
-        alert(`Assessment Generation Failed:\n\n${err.message}\n\nPlease try again.`);
+        alert(`Assessment Generation Failed:\n\n${err.message}`);
       }
     });
   }

@@ -3,9 +3,11 @@
   "scripts": {
     "install-backend": "cd backend && npm install",
     "start": "cd backend && npm start",
-    "dev": "cd backend && npm run dev"
+    "dev": "cd backend && npm run dev",
+    "test": "cd backend && npm test",
+    "check:ai": "cd backend && npm run check:ai"
   },
-  "dependencies": {
-    "node": "^26.4.0"
+  "engines": {
+    "node": ">=20"
   }
 }

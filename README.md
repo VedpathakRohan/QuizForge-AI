@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # QuizForge AI
 
 ## Overview
@@ -15,7 +14,7 @@ The backend supports MongoDB and has an in-memory fallback mode for development.
 
 ## Features
 
-- AI-powered quiz generation using Google Gemini
+- AI-powered quiz generation using Google Gemini (validated, shuffled MCQs)
 - user authentication and CAPTCHA verification
 - email OTP verification for signup
 - fallback in-memory storage when MongoDB is unavailable
@@ -55,7 +54,7 @@ quizforge-ai/
 
 ### Prerequisites
 
-- Node.js v20 or later
+- Node.js v20 or later (v22 tested)
 - npm
 - Optional: MongoDB if you want persistent storage
 - Optional: Google Gemini API key for real AI generation
@@ -110,7 +109,34 @@ SMTP_USER=you@example.com
 SMTP_PASS=yourpassword
 ```
 
-If `GEMINI_API_KEY` is not provided, the backend will use a built-in fallback quiz generator.
+`GEMINI_API_KEY` is **required** for quiz generation. If it is missing or still the
+placeholder, the app shows a clear error instead of fake questions.
+
+| Variable | Purpose |
+|---|---|
+| `GEMINI_API_KEY` | Key from https://aistudio.google.com/apikey |
+| `GEMINI_MODEL` | Optional, comma-separated, first is preferred. Default: `gemini-3.8-flash,gemini-3.6-flash,gemini-3.5-flash-lite,gemini-2.5-flash` |
+| `GEMINI_TIMEOUT_MS` | Optional per-request timeout (default 90000) |
+
+Google retires models often (`gemini-1.5-flash` and `gemini-2.0-flash` are already
+shut down). Current list: https://ai.google.dev/gemini-api/docs/deprecations
+
+On Render/hosting, set these as environment variables in the dashboard (`.env` is git-ignored).
+
+## Verify your setup
+
+```bash
+cd backend
+npm run check:ai   # calls Gemini for real and tells you exactly what is wrong
+npm test           # offline unit + end-to-end tests (fake Gemini server)
+```
+
+## Troubleshooting
+
+- **"AI quiz generation is not configured"**: add a real `GEMINI_API_KEY` to `backend/.env`, restart.
+- **"Gemini rejected the API key"**: key is wrong/expired/restricted.
+- **"None of the configured Gemini models are available"**: set `GEMINI_MODEL` to a current model.
+- **Sent back to login unexpectedly**: without MongoDB, sessions live in memory and reset on every server restart.
 
 ## GitHub Repository
 

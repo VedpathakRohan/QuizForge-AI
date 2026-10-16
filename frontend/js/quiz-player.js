@@ -30,6 +30,13 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
 
+  if (!quiz || !Array.isArray(quiz.questions) || quiz.questions.length === 0) {
+    alert('The saved quiz is invalid. Returning to dashboard.');
+    localStorage.removeItem('quizforge_current_quiz');
+    window.location.href = 'index.html';
+    return;
+  }
+
   // --- Game Loop States ---
   let currentIndex = 0;
   let score = 0;

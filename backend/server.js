@@ -10,6 +10,12 @@ import Analytics from './models/Analytics.js';
 import User from './models/User.js';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
+import {
+  generateQuiz,
+  resolveModels,
+  isUsableApiKey,
+  QuizGenerationError
+} from './services/quizGenerator.js';
 
 // Load environment configurations
 dotenv.config();
@@ -21,10 +27,22 @@ const frontendPath = path.join(__dirname, '../frontend');
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-// Initialize Google Gen AI client using official SDK
-const geminiApiKey = process.env.GEMINI_API_KEY || '';
-const hasGeminiApiKey = Boolean(geminiApiKey);
-const ai = hasGeminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
+// Initialize Google Gen AI client using official SDK.
+// Placeholder values such as "your_api_key_here" are treated as "not configured"
+// so we never pretend to have an AI while actually serving fake questions.
+const geminiApiKey = (process.env.GEMINI_API_KEY || '').trim().replace(/^['"]|['"]$/g, '').trim();
+const hasGeminiApiKey = isUsableApiKey(geminiApiKey);
+const geminiModels = resolveModels(process.env.GEMINI_MODEL);
+const GEMINI_TIMEOUT_MS = parseInt(process.env.GEMINI_TIMEOUT_MS, 10) || 90000;
+const ai = hasGeminiApiKey
+  ? new GoogleGenAI({ apiKey: geminiApiKey, httpOptions: { timeout: GEMINI_TIMEOUT_MS } })
+  : null;
+
+if (hasGeminiApiKey) {
+  console.log(`[AI] Gemini configured. Models (in order): ${geminiModels.join(', ')}`);
+} else {
+  console.warn('[AI] GEMINI_API_KEY is missing or still a placeholder. Quiz generation will return an error until a real key is set in backend/.env.');
+}
 
 // In-Memory cache storage when MongoDB database is offline
 const inMemoryQuizzes = new Map();
@@ -37,140 +55,6 @@ const pendingRegistrations = new Map(); // email -> { name, passwordHash, salt, 
 
 // Captcha Verification Map
 const activeCaptchas = new Map();
-
-function generateFallbackQuiz(topic, difficulty, count = 10) {
-  const title = `${topic.charAt(0).toUpperCase() + topic.slice(1)} (${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}) Quiz`;
-  const questions = [];
-  const difficultyLabels = {
-    easy: 'basic understanding',
-    medium: 'application-level reasoning',
-    hard: 'complex conceptual analysis'
-  };
-  const difficultyDescription = difficultyLabels[difficulty.toLowerCase()] || 'subject knowledge';
-
-  for (let i = 0; i < count; i += 1) {
-    questions.push({
-      questionText: `Question ${i + 1}: Which statement best describes a ${difficultyDescription} concept related to ${topic}?`,
-      options: [
-        `A correct core concept about ${topic}`,
-        `A plausible but incorrect statement about ${topic}`,
-        `A distractor that sounds related but is wrong`,
-        `An unrelated detail not central to ${topic}`
-      ],
-      correctAnswerIndex: 0,
-      explanation: `The correct answer is the first option because it captures the fundamental ${difficultyDescription} concept behind ${topic}, while the other options are either misleading or unrelated.`
-    });
-  }
-
-  return {
-    title,
-    topic,
-    difficulty: difficulty.toLowerCase(),
-    questions
-  };
-}
-
-function extractTextFromAiResponse(response) {
-  if (!response) return '';
-  if (typeof response === 'string') return response;
-  if (response.text) return response.text;
-  if (response.candidates?.[0]?.content?.parts) {
-    return response.candidates[0].content.parts
-      .map((part) => (part && typeof part.text === 'string' ? part.text : ''))
-      .join('');
-  }
-  return '';
-}
-
-function stripMarkdownCodeBlocks(raw) {
-  return raw.replace(/```(?:json)?\n([\s\S]*?)```/g, '$1').trim();
-}
-
-function extractJsonString(raw) {
-  if (!raw) return '';
-  const trimmed = raw.trim();
-  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-    return trimmed;
-  }
-
-  const firstBrace = trimmed.indexOf('{');
-  const lastBrace = trimmed.lastIndexOf('}');
-  if (firstBrace !== -1 && lastBrace > firstBrace) {
-    return trimmed.slice(firstBrace, lastBrace + 1);
-  }
-  return trimmed;
-}
-
-function parseAiJson(rawText) {
-  if (!rawText || typeof rawText !== 'string') return null;
-
-  let candidate = stripMarkdownCodeBlocks(rawText);
-  candidate = candidate.trim();
-
-  try {
-    return JSON.parse(candidate);
-  } catch (firstParseError) {
-    const extracted = extractJsonString(candidate);
-    if (extracted !== candidate) {
-      try {
-        return JSON.parse(extracted);
-      } catch (secondParseError) {
-        return null;
-      }
-    }
-    return null;
-  }
-}
-
-function normalizeQuestionItem(q, index) {
-  if (!q || typeof q !== 'object') return null;
-
-  const questionText = String(q.questionText || q.question || '').trim();
-  if (!questionText) return null;
-
-  const rawOptions = Array.isArray(q.options)
-    ? q.options
-    : Array.isArray(q.choices)
-      ? q.choices
-      : Array.isArray(q.answers)
-        ? q.answers
-        : [];
-
-  const cleanedOptions = rawOptions
-    .filter((opt) => typeof opt === 'string' && opt.trim())
-    .map((opt) => opt.trim());
-
-  const uniqueOptions = [...new Set(cleanedOptions)];
-  if (uniqueOptions.length < 4) return null;
-
-  const options = uniqueOptions.slice(0, 4);
-
-  let correctAnswerIndex = q.correctAnswerIndex;
-  if (typeof correctAnswerIndex === 'string') {
-    const trimmed = correctAnswerIndex.trim().toUpperCase();
-    if (/^[A-D]$/.test(trimmed)) {
-      correctAnswerIndex = trimmed.charCodeAt(0) - 65;
-    }
-  }
-
-  correctAnswerIndex = Number.isInteger(correctAnswerIndex)
-    ? correctAnswerIndex
-    : parseInt(correctAnswerIndex, 10);
-
-  if (Number.isNaN(correctAnswerIndex) || correctAnswerIndex < 0 || correctAnswerIndex > 3) {
-    return null;
-  }
-
-  const explanation = String(q.explanation || q.explain || q.reason || '').trim();
-  if (!explanation) return null;
-
-  return {
-    questionText,
-    options,
-    correctAnswerIndex,
-    explanation
-  };
-}
 
 // Configure nodemailer transport
 const transporter = nodemailer.createTransport({
@@ -262,7 +146,7 @@ app.use((req, res, next) => {
 // Connect to MongoDB
 const mongoUri = process.env.MONGO_URI || 'mongodb://localhost:27017/quizforge';
 mongoose
-  .connect(mongoUri)
+  .connect(mongoUri, { serverSelectionTimeoutMS: 5000 })
   .then(() => console.log('Successfully connected to MongoDB.'))
   .catch((err) => {
     console.warn('MongoDB connection failure. Switching to IN-MEMORY DATABASE FALLBACK MODE:', err.message);
@@ -327,7 +211,11 @@ app.get('/api/health', (req, res) => {
     mongoConnected: mongoStatus === 1,
     timestamp: new Date().toISOString(),
     inMemorySessions: inMemorySessions.size,
-    inMemoryUsers: inMemoryUsers.size
+    inMemoryUsers: inMemoryUsers.size,
+    ai: {
+      configured: hasGeminiApiKey,
+      models: geminiModels
+    }
   });
 });
 
@@ -406,7 +294,18 @@ app.post('/api/auth/signup', async (req, res) => {
     // Send OTP verification email
     const emailSent = await sendOtpEmail(lowerEmail, otp);
     const isSmtpConfigured = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
-    const showOtp = !isSmtpConfigured || !emailSent;
+
+    // SMTP is set up but the mail failed: never hand the code back to the browser,
+    // that would let anyone "verify" an email address they do not own.
+    if (isSmtpConfigured && !emailSent) {
+      return res.status(502).json({
+        success: false,
+        error: 'We could not send the verification email right now. Please try again in a few minutes.'
+      });
+    }
+
+    // Local/dev mode (no SMTP configured): expose the code so signup still works.
+    const showOtp = !isSmtpConfigured;
 
     return res.status(200).json({
       success: true,
@@ -520,7 +419,14 @@ app.post('/api/auth/resend-otp', async (req, res) => {
 
     const emailSent = await sendOtpEmail(lowerEmail, newOtp);
     const isSmtpConfigured = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
-    const showOtp = !isSmtpConfigured || !emailSent;
+
+    if (isSmtpConfigured && !emailSent) {
+      return res.status(502).json({
+        success: false,
+        error: 'We could not send the verification email right now. Please try again in a few minutes.'
+      });
+    }
+    const showOtp = !isSmtpConfigured;
 
     return res.json({
       success: true,
@@ -604,24 +510,39 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 /**
+ * Cleans the user-supplied topic: strips control characters, collapses whitespace
+ * and caps the length so it cannot be abused to bloat or hijack the AI prompt.
+ */
+function sanitizeTopic(raw) {
+  if (typeof raw !== 'string') return '';
+  return raw
+    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 200);
+}
+
+/**
  * POST /api/quiz/generate
- * Payload format: { topic: string, difficulty: 'easy'|'medium'|'hard' }
- * Generates an educational quiz with exactly 10 questions using gemini-2.5-flash.
- * Enforces response format via JSON Schema configuration.
+ * Payload: { topic: string, difficulty: 'easy'|'medium'|'hard', count?: 3-30 }
+ * Asks Gemini for real multiple-choice questions, validates every one of them
+ * and responds with an error (never with fake placeholder questions) if the AI
+ * cannot deliver. See services/quizGenerator.js.
  */
 app.post('/api/quiz/generate', authenticateUser, async (req, res) => {
   try {
-    const { topic, difficulty, count = 10 } = req.body;
+    const { difficulty, count = 10 } = req.body || {};
+    const topic = sanitizeTopic(req.body?.topic);
 
-    if (!topic || !difficulty) {
+    if (!topic || typeof difficulty !== 'string') {
       return res.status(400).json({
         success: false,
         error: 'Parameters "topic" and "difficulty" are required.'
       });
     }
 
-    const validDifficulties = ['easy', 'medium', 'hard'];
-    if (!validDifficulties.includes(difficulty.toLowerCase())) {
+    const normalizedDifficulty = difficulty.toLowerCase().trim();
+    if (!['easy', 'medium', 'hard'].includes(normalizedDifficulty)) {
       return res.status(400).json({
         success: false,
         error: 'Difficulty must be one of: easy, medium, hard.'
@@ -629,206 +550,61 @@ app.post('/api/quiz/generate', authenticateUser, async (req, res) => {
     }
 
     let parsedCount = parseInt(count, 10);
-    if (isNaN(parsedCount) || parsedCount < 3 || parsedCount > 30) {
+    if (Number.isNaN(parsedCount) || parsedCount < 3 || parsedCount > 30) {
       parsedCount = 10;
     }
 
-    console.log(`Generating quiz structure for: Topic="${topic}", Difficulty="${difficulty}", Count=${parsedCount}...`);
+    console.log(`Generating quiz: Topic="${topic}", Difficulty="${normalizedDifficulty}", Count=${parsedCount}`);
 
-    let quizData = null;
-    let response = null;
-
-    if (hasGeminiApiKey && ai) {
-      const systemPrompt = `You are an expert academic educator and professional assessment designer.
-Your goal is to generate a comprehensive, highly accurate, and engaging educational quiz on the topic of "${topic}" at a "${difficulty}" level.
-The level must affect the depth, conceptual vocabulary, and complexity:
-- easy: fundamental concepts, definitions, and direct recall.
-- medium: application of principles, analyzing scenarios, and distinguishing between core methodologies.
-- hard: multi-step logic, edge cases, analyzing complex relationships, and debugging or troubleshooting situations.
-
-CRITICAL REQUIREMENTS:
-1. Generate EXACTLY ${parsedCount} questions
-2. Each question MUST have ALL four fields
-3. Return ONLY valid JSON - no markdown, no explanation, no wrapping
-4. Each question must have exactly 4 unique answer options
-
-JSON Structure Required:
-{
-  "title": "Quiz Title",
-  "topic": "${topic}",
-  "difficulty": "${difficulty}",
-  "questions": [
-    {
-      "questionText": "Clear, precise question text here",
-      "options": ["Option A", "Option B", "Option C", "Option D"],
-      "correctAnswerIndex": 0,
-      "explanation": "Why this answer is correct and why others are wrong"
-    }
-  ]
-}
-
-IMPORTANT: Ensure options are distinct and meaningful. The correctAnswerIndex must be 0, 1, 2, or 3 (integer, not string).`;
-
-      const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
-      for (const modelName of modelsToTry) {
-        try {
-          console.log(`Querying AI core using model: "${modelName}"...`);
-          response = await ai.models.generateContent({
-            model: modelName,
-            contents: `Generate a quiz about Topic: "${topic}", Difficulty: "${difficulty}", Size: ${parsedCount} questions.`,
-            config: {
-              systemInstruction: systemPrompt,
-              responseMimeType: 'application/json',
-              responseSchema: {
-                type: 'object',
-                properties: {
-                  title: { type: 'string' },
-                  topic: { type: 'string' },
-                  difficulty: { type: 'string' },
-                  questions: {
-                    type: 'array',
-                    items: {
-                      type: 'object',
-                      properties: {
-                        questionText: { type: 'string' },
-                        options: {
-                          type: 'array',
-                          items: { type: 'string' },
-                          minItems: 4,
-                          maxItems: 4
-                        },
-                        correctAnswerIndex: { type: 'integer', minimum: 0, maximum: 3 },
-                        explanation: { type: 'string' }
-                      },
-                      required: ['questionText', 'options', 'correctAnswerIndex', 'explanation'],
-                      additionalProperties: false
-                    },
-                    minItems: 1
-                  }
-                },
-                required: ['title', 'topic', 'difficulty', 'questions'],
-                additionalProperties: false
-              }
-            }
-          });
-
-          const rawText = extractTextFromAiResponse(response);
-          console.log(`Model "${modelName}" response length: ${rawText?.length || 0} characters`);
-          
-          if (rawText) {
-            quizData = parseAiJson(rawText);
-            if (quizData && typeof quizData === 'object') {
-              console.log(`Success! Quiz candidate generated via model: "${modelName}".`);
-              console.log(`Questions received: ${quizData.questions?.length || 0}`);
-              if (Array.isArray(quizData.questions) && quizData.questions.length > 0) {
-                const firstQuestion = quizData.questions[0];
-                console.log(`First question sample:`, {
-                  hasText: !!firstQuestion.questionText,
-                  optionsCount: firstQuestion.options?.length,
-                  hasIndex: typeof firstQuestion.correctAnswerIndex !== 'undefined',
-                  hasExplanation: !!firstQuestion.explanation
-                });
-              }
-              break;
-            }
-            console.warn(`AI response from model "${modelName}" could not be parsed as JSON.`);
-            console.warn(`Raw response preview: ${rawText.substring(0, 200)}...`);
-          }
-        } catch (err) {
-          console.warn(`Model "${modelName}" failed with error:`, err?.message || err);
-        }
-      }
-    }
-
-    if (!quizData) {
-      if (!hasGeminiApiKey) {
-        console.warn('No Gemini API key configured. Using fallback quiz generator.');
-      } else {
-        console.warn('Falling back to built-in generator due to AI API failure or invalid output.');
-      }
-      quizData = generateFallbackQuiz(topic, difficulty, parsedCount);
-    }
-
-    if (typeof quizData === 'string') {
-      const parsed = parseAiJson(quizData);
-      if (parsed && typeof parsed === 'object') {
-        quizData = parsed;
-      } else {
-        console.warn('Failed to parse AI JSON output string. Falling back to built-in generator.');
-        quizData = generateFallbackQuiz(topic, difficulty, parsedCount);
-      }
-    }
-
-    if (!quizData || typeof quizData !== 'object') {
-      quizData = generateFallbackQuiz(topic, difficulty, parsedCount);
-    }
-
-    quizData.topic = topic;
-    quizData.difficulty = difficulty.toLowerCase();
-    if (!quizData.title || typeof quizData.title !== 'string') {
-      quizData.title = `${topic.charAt(0).toUpperCase() + topic.slice(1)} (${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}) Quiz`;
-    }
-
-    const normalizedQuestions = Array.isArray(quizData.questions) ? quizData.questions : [];
-    const validQuestions = normalizedQuestions
-      .map((question, index) => {
-        const result = normalizeQuestionItem(question, index);
-        if (!result) {
-          console.warn(`Question ${index + 1} failed validation:`, {
-            hasText: !!question.questionText,
-            optionsCount: question.options?.length,
-            optionsUnique: question.options ? [...new Set(question.options)].length : 0,
-            hasIndex: typeof question.correctAnswerIndex !== 'undefined',
-            indexValue: question.correctAnswerIndex,
-            hasExplanation: !!question.explanation
-          });
-        }
-        return result;
-      })
-      .filter(Boolean);
-
-    console.log(`Validation complete: ${validQuestions.length} of ${normalizedQuestions.length} questions passed`);
-
-    if (validQuestions.length < Math.min(parsedCount, 3)) {
-      console.warn('Generated quiz did not yield enough valid questions. Falling back to built-in generator.');
-      quizData = generateFallbackQuiz(topic, difficulty, parsedCount);
-    } else {
-      quizData.questions = validQuestions.slice(0, parsedCount);
-    }
-
-    if (!Array.isArray(quizData.questions) || quizData.questions.length === 0) {
-      throw new Error('Quiz data is missing a valid questions array.');
-    }
+    const quizData = await generateQuiz({
+      ai,
+      topic,
+      difficulty: normalizedDifficulty,
+      count: parsedCount,
+      models: geminiModels
+    });
+    const { meta, ...quizFields } = quizData;
+    console.log(`[quiz] Generated ${meta.generated}/${meta.requested} questions with ${meta.model}`);
 
     let savedQuiz;
     if (mongoose.connection.readyState === 1) {
-      quizData.createdBy = req.user._id;
-      const newQuiz = new Quiz(quizData);
+      quizFields.createdBy = req.user._id;
+      const newQuiz = new Quiz(quizFields);
       await newQuiz.save();
       savedQuiz = newQuiz;
       console.log(`Quiz successfully saved to MongoDB. ID: ${savedQuiz._id}`);
     } else {
       const mockId = new mongoose.Types.ObjectId();
-      quizData._id = mockId;
-      quizData.createdBy = req.user._id.toString();
-      inMemoryQuizzes.set(mockId.toString(), quizData);
-      savedQuiz = quizData;
+      quizFields._id = mockId;
+      quizFields.createdBy = req.user._id.toString();
+      inMemoryQuizzes.set(mockId.toString(), quizFields);
+      savedQuiz = quizFields;
       console.log(`[IN-MEMORY MODE] Quiz saved in cache. ID: ${mockId}`);
     }
 
     return res.status(201).json({
       success: true,
-      quiz: savedQuiz
+      quiz: savedQuiz,
+      meta
     });
   } catch (err) {
+    if (err instanceof QuizGenerationError) {
+      console.error(`[quiz] ${err.code}: ${err.userMessage}`, err.details || '');
+      return res.status(err.httpStatus).json({
+        success: false,
+        code: err.code,
+        error: err.userMessage,
+        details: err.details
+      });
+    }
+
     console.error('Error in /api/quiz/generate:', err);
-    const mongoStatus = mongoose.connection.readyState === 1 ? 'connected' : 'offline';
     return res.status(500).json({
       success: false,
-      error: 'Assessment Generation Failed',
+      error: 'Assessment generation failed unexpectedly. Please try again.',
       details: err.message,
       diagnostics: {
-        mongoStatus: mongoStatus,
+        mongoStatus: mongoose.connection.readyState === 1 ? 'connected' : 'offline',
         geminiConfigured: hasGeminiApiKey,
         timestamp: new Date().toISOString()
       }
@@ -852,18 +628,39 @@ app.post('/api/quiz/analytics', authenticateUser, async (req, res) => {
       });
     }
 
-    // Validate if the quiz exists
-    let quizExists = false;
-    if (mongoose.connection.readyState === 1) {
-      quizExists = await Quiz.findById(quizId);
-    } else {
-      quizExists = inMemoryQuizzes.has(quizId);
+    // Reject nonsense numbers (e.g. score > total) before they reach the database
+    const isCount = (n) => Number.isInteger(n) && n >= 0;
+    if (!isCount(finalScore) || !isCount(totalQuestions) || totalQuestions < 1 ||
+        finalScore > totalQuestions || !isCount(antiCheatViolations) ||
+        typeof timeSpentSeconds !== 'number' || !Number.isFinite(timeSpentSeconds) || timeSpentSeconds < 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid analytics values: score must be between 0 and the number of questions.'
+      });
     }
 
-    if (!quizExists) {
+    // Validate if the quiz exists
+    let quizRecord = null;
+    if (mongoose.connection.readyState === 1) {
+      if (!mongoose.isValidObjectId(quizId)) {
+        return res.status(404).json({ success: false, error: 'The referenced quiz ID does not exist.' });
+      }
+      quizRecord = await Quiz.findById(quizId);
+    } else {
+      quizRecord = inMemoryQuizzes.get(String(quizId)) || null;
+    }
+
+    if (!quizRecord) {
       return res.status(404).json({
         success: false,
         error: 'The referenced quiz ID does not exist.'
+      });
+    }
+
+    if (Array.isArray(quizRecord.questions) && quizRecord.questions.length !== totalQuestions) {
+      return res.status(400).json({
+        success: false,
+        error: 'totalQuestions does not match the quiz that was taken.'
       });
     }
 
